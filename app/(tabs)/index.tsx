@@ -1,98 +1,135 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useState, useMemo, useEffect } from 'react';
+// BARU: Tambahkan TextInput untuk search bar
+import { FlatList, StyleSheet, View, Text, SafeAreaView, Pressable, ScrollView, ActivityIndicator, TextInput } from 'react-native';
+import { useAppStore, OrderStatus } from '../../store/appStore';
+import OrderItem from '../../components/OrderItem';
+import Colors from '../../constants/Colors';
+import { useThemeStore } from '../../store/themeStore';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+const STATUS_FILTERS: OrderStatus[] = ['belum dicuci', 'sedang dicuci', 'selesai', 'sudah diambil'];
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const { orders, loading, fetchOrders } = useAppStore();
+  const { theme } = useThemeStore();
+  const styles = getStyles(theme);
+  
+  const [activeFilter, setActiveFilter] = useState<OrderStatus | 'semua'>('semua');
+  // BARU: State untuk menyimpan teks pencarian
+  const [searchQuery, setSearchQuery] = useState('');
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  // REVISI: Logika filter sekarang menggabungkan filter status dan pencarian
+  const finalFilteredOrders = useMemo(() => {
+    // Langkah 1: Filter berdasarkan status (seperti sebelumnya)
+    let filtered = orders;
+    if (activeFilter !== 'semua') {
+      filtered = orders.filter((order) => order.orderStatus === activeFilter);
+    }
+
+    // Langkah 2: Filter hasil di atas berdasarkan query pencarian
+    if (searchQuery.trim() !== '') {
+      const lowercasedQuery = searchQuery.toLowerCase();
+      filtered = filtered.filter((order) =>
+        order.customerName.toLowerCase().includes(lowercasedQuery)
+      );
+    }
+    
+    return filtered;
+  }, [orders, activeFilter, searchQuery]); // Jalankan ulang jika salah satu dari ini berubah
+
+  if (loading && orders.length === 0) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={Colors.light.tint} />
+        <Text style={styles.emptyText}>Memuat pesanan dari database...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* BARU: Kontainer untuk Search Bar */}
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Cari nama pelanggan..."
+          placeholderTextColor={Colors[theme].placeholder}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
+
+      {/* Filter Buttons */}
+      <View style={styles.filterContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingHorizontal: 16}}>
+          <Pressable
+            style={[styles.filterButton, activeFilter === 'semua' && styles.activeFilter]}
+            onPress={() => setActiveFilter('semua')}>
+            <Text style={[styles.filterText, activeFilter === 'semua' && {color: 'white'}]}>Semua</Text>
+          </Pressable>
+          {STATUS_FILTERS.map((status) => (
+            <Pressable
+              key={status}
+              style={[styles.filterButton, activeFilter === status && styles.activeFilter]}
+              onPress={() => setActiveFilter(status)}>
+              <Text style={[styles.filterText, activeFilter === status && {color: 'white'}]}>{status}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* REVISI: FlatList sekarang menggunakan data yang sudah difilter ganda */}
+      <FlatList
+        data={finalFilteredOrders}
+        onRefresh={fetchOrders}
+        refreshing={loading}
+        renderItem={({ item }) => <OrderItem order={item} />}
+        keyExtractor={(item) => item.id.toString()}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>Tidak ada pesanan yang cocok. 🧺</Text>
+          </View>
+        }
+        contentContainerStyle={{ paddingBottom: 20 }}
+      />
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});
+const getStyles = (scheme: 'light' | 'dark') => {
+  const colors = Colors[scheme];
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    centered: { justifyContent: 'center', alignItems: 'center' },
+    
+    // BARU: Style untuk search bar
+    searchContainer: {
+      padding: 16,
+      backgroundColor: colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    searchInput: {
+      backgroundColor: colors.background,
+      color: colors.text,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderRadius: 10,
+      fontSize: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+
+    filterContainer: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+    filterButton: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginRight: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+    activeFilter: { backgroundColor: Colors.light.tint, borderColor: Colors.light.tint },
+    filterText: { color: colors.text, textTransform: 'capitalize', fontWeight: '500' },
+    separator: { height: 1, backgroundColor: colors.border },
+    emptyContainer: { flex: 1, marginTop: 100, alignItems: 'center', justifyContent: 'center' },
+    emptyText: { fontSize: 16, color: colors.placeholder, marginTop: 10, textAlign: 'center' },
+  });
+};
