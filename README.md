@@ -48,4 +48,4 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
-- https://github.com/depaimonn/UTS-PEMROGRAMAN-MOBILE.git
+- https://www.loom.com/share/91612f1f8e9e44c79b3f155d47f8385f
