@@ -77,7 +77,7 @@ export default function TabLayout() {
         name="add"
         options={{
           tabBarIcon: () => (
-            <Ionicons name="add" size={40} color="white" />
+            <Ionicons name="add" size={20} color="white" />
           ),
           // Ganti tombol tab default dengan komponen kustom kita
           tabBarButton: (props) => (

@@ -23,7 +23,6 @@ export default function OrderItem({ order }: { order: Order }) {
     return '#757575';
   };
 
-  // FIX: Logika baru untuk menampilkan detail pesanan
   let detailDisplay: string;
   if (order.serviceType === 'kiloan') {
     // Jika kiloan, tampilkan berat dan kecepatan

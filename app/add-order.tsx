@@ -1,65 +1,64 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, Alert, ScrollView, SafeAreaView, Pressable, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAppStore, ServiceType, ServiceSpeed } from '../store/appStore';
 import Colors from '../constants/Colors';
 import { Picker } from '@react-native-picker/picker';
 import { useThemeStore } from '../store/themeStore';
-import { SATUAN_ITEMS } from '../constants/Pricing';
 import { Ionicons } from '@expo/vector-icons';
+import { useServiceStore } from '../store/serviceStore';
 
 export default function AddOrderScreen() {
   const { addOrder } = useAppStore();
   const router = useRouter();
   const { theme } = useThemeStore();
-  const styles = getStyles(theme);
+  
+  const { services, fetchServices } = useServiceStore();
+
+  // FIX: Tambahkan fetchServices ke dependency array
+  useEffect(() => {
+    fetchServices();
+  }, [fetchServices]);
+
+  const kiloanService = useMemo(() => services.find(s => s.serviceType === 'kiloan'), [services]);
+  const satuanItems = useMemo(() => services.filter(s => s.serviceType === 'satuan'), [services]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [serviceType, setServiceType] = useState<ServiceType>('kiloan');
   const [speed, setSpeed] = useState<ServiceSpeed>('regular');
   const [weight, setWeight] = useState('');
-  const [quantities, setQuantities] = useState<{[itemId: string]: number}>({});
+  const [quantities, setQuantities] = useState<{[serviceId: number]: number}>({});
 
-  const handleQuantityChange = (itemId: string, change: 1 | -1) => {
+  const handleQuantityChange = (serviceId: number, change: 1 | -1) => {
     setQuantities(prev => {
-      const currentQty = prev[itemId] || 0;
+      const currentQty = prev[serviceId] || 0;
       const newQty = Math.max(0, currentQty + change);
-      return { ...prev, [itemId]: newQty };
+      return { ...prev, [serviceId]: newQty };
     });
   };
 
   const totalPrice = useMemo(() => {
-    if (serviceType === 'kiloan') {
+    if (serviceType === 'kiloan' && kiloanService) {
       const weightNum = parseFloat(weight) || 0;
-      const pricePerKg = speed === 'regular' ? 7000 : 12000;
+      const pricePerKg = speed === 'regular' ? kiloanService.priceRegular : kiloanService.priceKilat;
       return weightNum * pricePerKg;
     } else {
-      return SATUAN_ITEMS.reduce((total, item) => {
+      return satuanItems.reduce((total, item) => {
         const qty = quantities[item.id] || 0;
         const price = speed === 'regular' ? item.priceRegular : item.priceKilat;
         return total + (qty * price);
       }, 0);
     }
-  }, [serviceType, speed, weight, quantities]);
+  }, [serviceType, speed, weight, quantities, kiloanService, satuanItems]);
 
   const handleSubmit = async () => {
-    if (!customerName.trim()) {
-      Alert.alert('Error', 'Nama pelanggan harus diisi.');
-      return;
-    }
-    if (serviceType === 'kiloan' && (isNaN(parseFloat(weight)) || parseFloat(weight) <= 0)) {
-      Alert.alert('Error', 'Berat harus angka valid lebih dari 0.');
-      return;
-    }
+    if (!customerName.trim()) { Alert.alert('Error', 'Nama pelanggan harus diisi.'); return; }
+    if (serviceType === 'kiloan' && (isNaN(parseFloat(weight)) || parseFloat(weight) <= 0)) { Alert.alert('Error', 'Berat harus valid.'); return; }
     const satuanItemsList = Object.entries(quantities).filter(([_, qty]) => qty > 0);
-    if (serviceType === 'satuan' && satuanItemsList.length === 0) {
-      Alert.alert('Error', 'Pilih minimal satu item untuk layanan satuan.');
-      return;
-    }
+    if (serviceType === 'satuan' && satuanItemsList.length === 0) { Alert.alert('Error', 'Pilih minimal satu item satuan.'); return; }
 
     setIsSubmitting(true);
-    // FIX: Ubah `catch (error)` menjadi `catch {}` karena variabel error tidak digunakan.
     try {
       const orderData: any = {
         customerName: customerName.trim(),
@@ -67,8 +66,8 @@ export default function AddOrderScreen() {
         speed,
         price: totalPrice,
         weight: serviceType === 'kiloan' ? parseFloat(weight) : undefined,
-        items: serviceType === 'satuan' ? satuanItemsList.map(([itemId, qty]) => {
-          const itemInfo = SATUAN_ITEMS.find(i => i.id === itemId)!;
+        items: serviceType === 'satuan' ? satuanItemsList.map(([serviceId, qty]) => {
+          const itemInfo = satuanItems.find(i => i.id === parseInt(serviceId))!;
           return {
             itemName: itemInfo.name,
             quantity: qty,
@@ -76,19 +75,20 @@ export default function AddOrderScreen() {
           };
         }) : undefined,
       };
-
       await addOrder(orderData);
       router.back();
     } catch {
-      // Blok catch ini bisa kosong karena error sudah ditangani dengan Alert di dalam store.
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const formattedTotalPrice = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(totalPrice);
-  const categories = [...new Set(SATUAN_ITEMS.map(item => item.category))];
+  const categories = [...new Set(satuanItems.map(item => item.category))];
   const isButtonDisabled = totalPrice <= 0;
+
+  // FIX: Mengembalikan kode JSX yang hilang, yang menyebabkan semua error 'unused variable'.
+  const styles = getStyles(theme);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -128,7 +128,7 @@ export default function AddOrderScreen() {
             {categories.map(category => (
               <View key={category} style={styles.categoryContainer}>
                 <Text style={styles.categoryTitle}>{category}</Text>
-                {SATUAN_ITEMS.filter(item => item.category === category).map(item => (
+                {satuanItems.filter(item => item.category === category).map(item => (
                   <View key={item.id} style={styles.satuanItem}>
                     <View>
                       <Text style={styles.itemName}>{item.name}</Text>
